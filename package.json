@@ -17,7 +17,9 @@
     "validate": "node scripts/validate-dist.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "check": "npm run typecheck && npm run test && npm run build && npm run validate"
+    "check": "npm run typecheck && npm run test && npm run build && npm run validate",
+    "package": "npm run build && node scripts/package.mjs",
+    "release": "npm run check && npm run package"
   },
   "devDependencies": {
     "@types/chrome": "0.0.287",

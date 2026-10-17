@@ -1,78 +1,85 @@
 # LingoLens
 
-一个本地优先、由用户自带 API Key 驱动的 Chrome 沉浸式双语阅读扩展。它保留网页原文，并在每个可读段落后插入 AI 译文，支持 OpenAI、DeepSeek 和自定义 OpenAI-compatible 服务。
+A local-first Chrome extension for immersive bilingual reading. LingoLens keeps the original page and inserts an AI translation after each readable block. It works with OpenAI, DeepSeek, and any OpenAI-compatible endpoint you configure, using your own API key.
 
-## 已实现
+## Features
 
-- 当前网页逐段双语翻译，支持暂停、继续、扫描新增内容和一键还原
-- 针对复杂布局，译文会尝试选择更完整的文本块和更安全的插入位置，以减少落进链接、裁切区域或 flex/grid 子项而不可见的情况
-- 独立翻译页面，可粘贴长文本并复制译文
-- 点击工具栏图标即可在弹窗内快速翻译文本：粘贴后按 Ctrl+Enter 或点「翻译」，可一键复制译文，无需打开独立页面
-- 页面悬浮窗可切换三种显示模式：双语（原文 + 译文）、仅译文（隐藏原文）、悬停（鼠标移入原文才显示译文）；选择会被记住
-- 支持自定义术语表：在设置里按「原文=译文」每行一条维护，网页与 PDF 翻译都会固定使用这些译法（最多 100 条）
-- 弹窗可一键导出本页译文为 Markdown（含原文与译文对照），便于存档或分享
-- 翻译缓存会持久保存在本机，浏览器重启或后台休眠后再次翻译相同内容不会重复请求 AI 服务
-- 独立文本页默认使用“智能选择”：自动检测语言，中文翻译为英语，其他语言翻译为简体中文；也可手动指定目标语言。检测结果有歧义时，请手动选择目标语言
-- PDF 双栏翻译：当前标签页打开 LingoLens PDF 页面；宽屏下每页左侧显示原始 canvas、右侧以与原页同尺寸的 canvas 显示译文，两侧按页共享滚动。译文 canvas 不支持直接选择文字；请使用每页的“复制本页译文”或“复制当前部分译文”按钮
-- PDF 译文会保留原页的位图图像（照片、图表、插图）：右侧译文栏以与原页一致的位置显示这些图像，译文文字自动避让图像区域，不与之重叠。v1 限制：
-  - 仅复制位图图像；掩膜图像、平铺图案、矢量图形不复制；
-  - 避让为整行宽（窄图也会让整行文字下移，不拆列）；
-  - 过小区域（任一边小于页尺寸 0.4%）与近整页图像（宽高均达 90%，如整页扫描）不复制；
-  - 单页最多处理 60 个图像区域；页面操作流超过 5 万条时该页跳过图像处理（仅文字）；
-  - 图像为原页像素复制，不可选中/搜索；“复制本页译文”按钮仍只复制文字。
-- PDF 译文正文基准字号（流动排版回退规则）会在 20px 到 12px 之间自动缩小以适应页面；仍放不下时显示“译文过长，完整内容请复制”，完整译文仍可通过复制按钮取得。为控制资源占用，最多保留 4 个页面对（总计 8 个非零 canvas 缓存）
-- PDF 译文会近似还原原文的标题层级：在流动排版模式下，检测到标题时逐级放大并加粗（约 1.6×/1.3×/1.15×），随正文基准字号等比缩放（标题可大于 20px，放不下时随基准回落，正文基准仍以 12px 为下限）；在位置锚定模式下，标题保留粗体但不额外放大。标题检测偏向保守，特征不足时不判定
-- PDF 译文新增「按原文位置锚定」模式：当页面提供位置数据（常规水平文本 PDF）时，译文段落/标题按原文段顶的纵向位置排版，“图片在其语义上下文下方”的相对关系成立。译文在槽位内自适应：期望字号取原文字号比例（限制在 10–24px），必要时逐级缩小到 8px；仍放不下则该段落按槽位截断、末行显示“…”，页面出现截断时显示“译文过长，完整内容请复制”页脚，完整译文仍可通过复制按钮取得
-- 检测到居中原文段落（保守：仅常规横向页面、几何明确时判定；页面旋转、倾斜或不确定时不判定）时，译文同样按行居中渲染
-- 锚定模式下，图片、前文膨胀/碰撞与页脚属于语义避让：相关段落会向下移动避让，不承诺像素级 y 对齐；图片本身仍按原坐标显示
-- 当页面几何不安全（旋转/倾斜文字、竖排字体、异常视口等）时，该页整体回退为原有“流动排版”（20→12px 自适应 + 标题放大），保持旧行为
-- PDF 译文按原文衬线/无衬线特征选用近似字体栈（衬线如 Georgia/Noto Serif SC/Songti SC/SimSun，无衬线如 system-ui/Noto Sans SC/PingFang SC/Microsoft YaHei），并以通用族 serif/sans-serif 兜底。这是近似匹配，不使用 PDF 内嵌字体；无法判断时回退到页面/文档的多数字体风格，最终默认衬线
-- 支持 HTTP/HTTPS 网络文本 PDF 与本地文件选择器。网络来源按当前 origin 请求可选权限；完整 URL 不进入扩展 query 或 history，本地选择的文件不会保存
-- 网页内可折叠悬浮控制窗，无需反复打开工具栏 popup
-- 动态网页内容监听（无限滚动、稍后加载的文章段落）
-- 划词翻译浮层和右键菜单翻译
-- DeepSeek、OpenAI、自定义 API 地址与模型
-- 自定义服务域名的按需权限申请
-- API 连接测试、语言选择、三种译文样式
-- 首屏优先的小批次渐进翻译、最多 4 路并发、会话缓存和 429/5xx 指数退避重试
-- `Alt+Shift+T` 快捷翻译/还原
+- **In-page bilingual translation** — translates readable blocks as you scroll; supports pause, resume, dynamic content, and one-click restore.
+- **Layout-aware insert placement** — picks a safer insertion point so translations avoid landing inside links, clipped containers, or flex/grid children.
+- **Three display modes** — bilingual (original + translation), translation-only, or hover (translation appears when you move the pointer over the original). The choice is remembered.
+- **Quick text translation in the popup** — paste text, press `Ctrl+Enter` (or click Translate), and copy the result without opening a separate page.
+- **Standalone translator page** — long-form text with smart language selection (Chinese → English, everything else → Simplified Chinese) or a manual target language.
+- **Glossary** — define fixed term mappings (`source=target`, one per line) that apply to page, popup, and PDF translation. Up to 100 entries.
+- **Markdown export** — export the current page's source/translation pairs from the popup for archiving or sharing.
+- **Persistent translation cache** — results survive service-worker restarts and browser restarts, so identical content is not billed twice.
+- **PDF dual-pane translation** — original canvas on the left, same-size translation canvas on the right, shared scrolling. Images from the original page are copied in place, headings keep their hierarchy, centered paragraphs stay centered, and text is anchored to the original vertical position when reliable geometry is available.
+- **Selection bubble and context menu** — translate selected text without leaving the page.
+- **Providers and safety** — DeepSeek, OpenAI, and custom OpenAI-compatible endpoints with per-origin permission requests, connection testing, and explicit consent for remote HTTP.
+- **Progressive loading** — viewport-first small batches, up to four concurrent requests, session cache, and exponential backoff for 429/5xx responses.
+- **Keyboard shortcut** — `Alt+Shift+T` translates or restores the current page.
 
-## 构建与安装
+## Requirements
+
+- Node.js 22 or newer (for building and packaging)
+- Chrome 115 or newer
+
+## Build and install
 
 ```bash
-npm install
-npm run check
+npm ci
+npm run check        # typecheck + unit tests + build + dist validation
 ```
 
-1. 打开 `chrome://extensions/`。
-2. 开启右上角“开发者模式”。
-3. 点击“加载已解压的扩展程序”。
-4. 选择本项目的 `dist/` 目录。
-5. 打开扩展设置。新安装默认选择“兼容服务”，地址、模型与 API Key 均为空，请填写你自己的 OpenAI-compatible 服务信息。API Key 只存入 `chrome.storage.local`。远程 HTTP 地址还必须在设置页显式勾选风险确认，否则保存、测试、域名权限申请和实际翻译都会被拒绝。
-6. 访问普通网页，点击工具栏中的 LingoLens；页面右侧会出现悬浮窗，可直接翻译、暂停或还原。
-7. 也可在 popup 中打开“独立翻译页面”，粘贴文本单独翻译；或点击“PDF 双栏翻译”。普通页和受保护页都可以打开空白 PDF 页面后粘贴 PDF URL 或选择文件；`file://` 来源未授权时，请使用本地 PDF 选择器。
+1. Open `chrome://extensions/`.
+2. Enable **Developer mode**.
+3. Click **Load unpacked** and select this project's `dist/` directory.
+4. Open the extension settings. The default provider is **Custom** with empty address, model, and API key — fill in your own OpenAI-compatible endpoint. The API key is stored only in `chrome.storage.local`.
+5. Remote HTTP endpoints additionally require checking the plaintext-risk consent box; otherwise saving, testing, permission requests, and translation are refused. HTTPS and `localhost` / `127.0.0.1` HTTP do not require it.
+6. Visit a regular web page and click the LingoLens toolbar icon. A floating panel appears for translating, pausing, or restoring.
 
-> Chrome 内部页面、Chrome Web Store 等受保护页面不允许注入扩展脚本，因此无法翻译。
+> Chrome internal pages and the Chrome Web Store block script injection, so they cannot be translated.
 
-## API 配置
+## Packaging
 
-| 服务 | 默认 API 地址 | 默认模型 |
+```bash
+npm run package      # builds dist/ and writes lingolens-extension.zip
+```
+
+The archive contains the contents of `dist/` at its root (`manifest.json` at the top level), so it can be uploaded to the Chrome Web Store or unpacked for sideloading. Entries are sorted, timestamps are fixed, and compression is deterministic, which makes repeated builds byte-identical. The script prints the archive size and SHA-256 checksum.
+
+To run every gate and then package:
+
+```bash
+npm run release      # check + package
+```
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every push to `main`, every pull request, and on manual dispatch. It installs dependencies with `npm ci`, runs `npm run check` (typecheck, 288 unit tests, production build, dist validation), builds the deterministic archive with `npm run package`, prints its SHA-256, and uploads `lingolens-extension.zip` as a workflow artifact.
+
+## API configuration
+
+| Provider | Default API base URL | Default model |
 | --- | --- | --- |
 | DeepSeek | `https://api.deepseek.com` | `deepseek-chat` |
 | OpenAI | `https://api.openai.com/v1` | `gpt-4.1-mini` |
-| 兼容服务（默认） | 由用户填写（自建服务或团队中转站） | 由用户填写 |
+| Custom | Empty — fill in your own endpoint | Empty — fill in your own model |
 
-兼容服务地址应填写 API 根地址或完整的 `/chat/completions` 地址。地址预填不代表已获得授权。远程 HTTP 会明文传输 API Key 和翻译文本，必须在设置页显式勾选风险确认；未确认时保存、测试、域名权限申请和实际翻译均会拒绝。HTTPS 与 `localhost` / `127.0.0.1` 的 HTTP 不需要该确认。
+For a custom provider, enter either the API root or the full `/chat/completions` URL. A prefilled address does not imply permission. Remote HTTP sends the API key and page text in plaintext and requires explicit consent in settings; without it, saving, testing, permission requests, and translation are all refused. HTTPS and `localhost` / `127.0.0.1` HTTP are exempt.
 
-## 隐私与安全
+## Privacy and security
 
-- API Key 仅写入 `chrome.storage.local`，不会进入网页 DOM。
-- 网页文本和 API Key 会发送到用户选择的 AI 服务；使用共享中转站时会经过该中转站。远程 HTTP 会明文传输 API Key 和翻译文本；地址预填不代表授权，必须显式确认风险。
-- 扩展不常驻所有网页，只在用户点击扩展、快捷键或右键菜单后通过 `activeTab` 注入当前页面。
-- 兼容服务需要用户显式授权其域名；远程 HTTP 还需要显式风险确认。HTTPS 与 localhost HTTP 无需该确认。
-- PDF URL 仅短期绑定在 `chrome.storage.session` 的标签页来源记录中；本地 picker 不保存文件。
-- PDF 文本会直接发送到用户选定的 AI 服务；不支持扫描件或 OCR。
+- The API key is written only to `chrome.storage.local` and never inserted into page DOM.
+- Page text and the API key are sent to the provider you configure. When you use a shared relay, they pass through that relay. Remote HTTP transmits both in plaintext; an address being prefilled does not imply authorization, and you must explicitly accept the risk.
+- The extension does not run on all pages. It is injected through `activeTab` only after you click the icon, press the shortcut, or use the context menu.
+- Custom providers require an explicit per-origin permission request. Remote HTTP additionally requires the risk consent.
+- PDF URLs are bound to a tab's source record in `chrome.storage.session` and expire; files chosen with the local picker are never stored.
+- PDF text is sent directly to your configured provider. Scanned PDFs and OCR are not supported.
 
-## 当前范围
+## Scope and limits
 
-此版本支持网页双语阅读和 PDF 文本双栏翻译，但不包含 PDF OCR、视频字幕、图片 OCR、漫画翻译或云端账号同步。PDF 限制：仅处理文本层；文件最大 50 MiB、最多 300 页、最多提取 500,000 个字符；语言判断使用前三个非空页，最多 4,000 个字符，并只进行一次文档语言判断。Chrome minimum version 为 115；已在 Chrome 150 与 155（155.0.8059.39）实机验证，Chrome 115 最低版本未实机验证。
+This version covers in-page bilingual reading and text-layer PDF translation. It does not include PDF OCR, video subtitles, image OCR, manga translation, or account sync.
+
+PDF limits: text layer only; files up to 50 MiB, up to 300 pages, and up to 500,000 extracted characters. Language detection samples the first three non-empty pages (up to 4,000 characters) and runs once per document.
+
+Verified on Chrome 150 and Chrome 155 (155.0.8059.39). The Chrome 115 minimum has not been verified on a physical machine.
