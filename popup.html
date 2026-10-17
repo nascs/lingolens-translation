@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>LingoLens</title></head>
+  <body>
+    <main class="shell">
+      <header class="brand"><div class="mark" aria-hidden="true"><span>文</span><span>A</span></div><div><p class="eyebrow">BILINGUAL READER</p><h1>LingoLens</h1></div><button id="settings-button" class="icon-button" type="button" aria-label="打开设置" title="打开设置">⌘</button></header>
+      <section class="quick" aria-label="快速翻译文本">
+        <div class="quick-head"><span class="quick-title">快速翻译</span><span id="quick-route" class="quick-route">智能选择目标语言</span></div>
+        <textarea id="quick-source" class="quick-source" rows="2" maxlength="12000" placeholder="粘贴或输入文本，Ctrl + Enter 翻译" aria-label="要翻译的文本"></textarea>
+        <div class="quick-row"><span id="quick-note" class="quick-note" role="status"></span><button id="quick-copy" class="quick-copy" type="button" disabled>复制</button><button id="quick-translate" class="quick-translate" type="button">翻译</button></div>
+        <div id="quick-result" class="quick-result" aria-live="polite" hidden></div>
+      </section>
+      <section class="hero" aria-labelledby="hero-title"><div><p class="kicker">当前网页</p><h2 id="hero-title">保留语境，跨越语言</h2><p id="status-text" class="status-text">正在检查页面…</p></div><div class="orb" aria-hidden="true"><i></i></div></section>
+      <section class="status-card" aria-live="polite"><span id="status-badge" class="badge" data-state="idle">未开始</span></section>
+      <div id="notice" class="notice" role="status" hidden></div>
+      <section class="actions" aria-label="翻译控制"><button id="start-button" class="primary-button" type="button"><span class="button-glyph">译</span><span><strong>翻译此页面</strong><small>原文与译文逐段呈现</small></span><span aria-hidden="true">→</span></button><div class="secondary-actions"><button id="pause-button" class="secondary-button" type="button" disabled>暂停</button><button id="restore-button" class="secondary-button" type="button" disabled>还原原文</button></div></section>
+      <button id="export-button" class="translator-link" type="button"><span>导出本页译文</span><span aria-hidden="true">↓</span></button>
+      <button id="pdf-button" class="translator-link" type="button"><span>PDF 双栏翻译</span><span aria-hidden="true">↗</span></button>
+      <button id="translator-button" class="translator-link" type="button"><span>打开独立翻译页面</span><span aria-hidden="true">↗</span></button>
+      <footer><span id="provider-label">DeepSeek · deepseek-chat</span><span class="privacy-dot" aria-hidden="true"></span><span>密钥仅存本机</span></footer>
+    </main>
+    <script type="module" src="/src/popup/index.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "LingoLens - AI 双语阅读",
+  "version": "0.1.0",
+  "description": "用你自己的 AI API Key，把网页变成原文与译文并存的双语阅读空间。",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "minimum_chrome_version": "115",
+  "permissions": ["activeTab", "scripting", "storage", "contextMenus"],
+  "host_permissions": [
+    "https://api.openai.com/*",
+    "https://api.deepseek.com/*"
+  ],
+  "optional_host_permissions": ["https://*/*", "http://*/*", "http://localhost/*", "http://127.0.0.1/*"],
+  "background": {
+    "service_worker": "service-worker.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "LingoLens",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    }
+  },
+  "options_page": "options.html",
+  "commands": {
+    "translate-page": {
+      "suggested_key": { "default": "Alt+Shift+T", "mac": "Alt+Shift+T" },
+      "description": "翻译或还原当前网页"
+    }
+  },
+  "content_security_policy": {
+    "extension_pages": "default-src 'self'; script-src 'self'; worker-src 'self'; img-src 'self' data:; connect-src https://api.openai.com https://api.deepseek.com https: http:"
+  }
+}

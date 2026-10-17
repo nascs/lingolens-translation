@@ -1,0 +1,32 @@
+{
+  "name": "lingolens",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LingoLens — AI 双语阅读 Chrome 扩展：网页双语对照、弹窗快速翻译、PDF 双栏翻译",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nascs/lingolens-translation.git"
+  },
+  "homepage": "https://github.com/nascs/lingolens-translation#readme",
+  "bugs": {
+    "url": "https://github.com/nascs/lingolens-translation/issues"
+  },
+  "scripts": {
+    "build": "vite build",
+    "validate": "node scripts/validate-dist.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm run test && npm run build && npm run validate"
+  },
+  "devDependencies": {
+    "@types/chrome": "0.0.287",
+    "@types/node": "22.13.4",
+    "typescript": "5.7.3",
+    "vite": "6.4.3",
+    "vitest": "5.0.3"
+  },
+  "dependencies": {
+    "pdfjs-dist": "4.10.38"
+  }
+}

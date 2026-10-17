@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Build output and packaged extension
+dist/
+*.zip
+
+# Local tooling / assistant state
+.playwright-mcp/
+plan/
+*.log
+
+# Screenshots and local artifacts (icons are committed explicitly)
+*.png
+!public/icons/*.png
+
+# Environment and editor files
+.env
+.env.*
+.DS_Store
+.idea/
+.vscode/

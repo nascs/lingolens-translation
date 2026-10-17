@@ -1,0 +1,246 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { Settings } from "../shared/config";
+import { buildSystemPrompt, parseTranslationResponse, translateBatch, TranslationApiError } from "./api";
+
+const settings: Settings = {
+  provider: "deepseek",
+  apiKey: "placeholder",
+  baseUrl: "https://api.example.test",
+  model: "test-model",
+  allowInsecureHttp: false,
+  sourceLanguage: "auto",
+  targetLanguage: "zh-CN",
+  translationStyle: "subtle",
+  translateDynamicContent: true,
+  showSelectionButton: true,
+  displayMode: "bilingual",
+  glossary: ""
+};
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
+const successfulResponse = () => new Response(JSON.stringify({
+  choices: [{ message: { content: '{"translations":[{"id":"a","text":"ok"}]}' } }]
+}), { status: 200 });
+
+describe("parseTranslationResponse", () => {
+  it("parses fenced JSON and preserves requested ids", () => {
+    const raw = { choices: [{ message: { content: "```json\n{\"translations\":[{\"id\":\"a\",\"text\":\"你好\"}]}\n```" } }] };
+    expect(parseTranslationResponse(raw, ["a"])).toEqual([{ id: "a", text: "你好" }]);
+  });
+
+  it("rejects incomplete batches", () => {
+    const raw = { choices: [{ message: { content: '{"translations":[]}' } }] };
+    expect(() => parseTranslationResponse(raw, ["a"])).toThrow(TranslationApiError);
+  });
+});
+
+describe("translateBatch cancellation", () => {
+  it("forwards an external abort to an internal fetch signal and never retries", async () => {
+    const controller = new AbortController();
+    let internalSignal: AbortSignal | undefined;
+    const fetchMock = vi.fn((_url: string | URL | Request, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      internalSignal = init?.signal ?? undefined;
+      init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true });
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const request = translateBatch(settings, [{ id: "a", text: "hello" }], "en", "zh-CN", controller.signal);
+    await Promise.resolve();
+    expect(internalSignal).toBeDefined();
+    expect(internalSignal).not.toBe(controller.signal);
+    controller.abort();
+    expect(internalSignal?.aborted).toBe(true);
+    await expect(request).rejects.toMatchObject({ code: "CANCELLED" });
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("aborts immediately during retry backoff", async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    const fetchMock = vi.fn(async () => new Response("busy", { status: 503 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const request = translateBatch(settings, [{ id: "a", text: "hello" }], "en", "zh-CN", controller.signal);
+    await Promise.resolve();
+    await Promise.resolve();
+    controller.abort();
+    await expect(request).rejects.toMatchObject({ code: "CANCELLED" });
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+});
+
+describe("translateBatch retries and timeouts", () => {
+  it.each([429, 500, 503])("retries status %i three times then fails without a trailing wait", async (status) => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn(async () => new Response("busy", { status }));
+    vi.stubGlobal("fetch", fetchMock);
+    const request = translateBatch(settings, [{ id: "a", text: "hello" }], "en", "zh-CN");
+    const expectation = expect(request).rejects.toMatchObject({ code: "API_ERROR", status });
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(700);
+    await vi.advanceTimersByTimeAsync(1400);
+    await expectation;
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("retries twice then succeeds and leaves no timers", async () => {
+    vi.useFakeTimers();
+    let calls = 0;
+    const fetchMock = vi.fn(async () => {
+      calls += 1;
+      if (calls <= 2) return new Response("busy", { status: 429 });
+      return successfulResponse();
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const request = translateBatch(settings, [{ id: "a", text: "hello" }], "en", "zh-CN");
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(700);
+    await vi.advanceTimersByTimeAsync(1400);
+    await expect(request).resolves.toEqual([{ id: "a", text: "ok" }]);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("fails immediately on a non-retryable 4xx", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn(async () => new Response("bad", { status: 400 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const request = translateBatch(settings, [{ id: "a", text: "hello" }], "en", "zh-CN");
+    const expectation = expect(request).rejects.toMatchObject({ code: "API_ERROR", status: 400 });
+    await vi.advanceTimersByTimeAsync(0);
+    await expectation;
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("times out three hanging fetches and reports a timeout", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn((_url: string | URL | Request, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true });
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const request = translateBatch(settings, [{ id: "a", text: "hello" }], "en", "zh-CN");
+    const expectation = expect(request).rejects.toMatchObject({ code: "NETWORK_ERROR", message: "请求超时" });
+    await vi.advanceTimersByTimeAsync(60_000);
+    await vi.advanceTimersByTimeAsync(700);
+    await vi.advanceTimersByTimeAsync(60_000);
+    await vi.advanceTimersByTimeAsync(1400);
+    await vi.advanceTimersByTimeAsync(60_000);
+    await expectation;
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("times out a hanging response body then retries successfully", async () => {
+    vi.useFakeTimers();
+    let calls = 0;
+    const fetchMock = vi.fn((_url: string | URL | Request, init?: RequestInit) => {
+      calls += 1;
+      if (calls === 1) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: () => new Promise<string>((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true });
+          })
+        } as Response);
+      }
+      return Promise.resolve(successfulResponse());
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const request = translateBatch(settings, [{ id: "a", text: "hello" }], "en", "zh-CN");
+    await vi.advanceTimersByTimeAsync(60_000);
+    await vi.advanceTimersByTimeAsync(700);
+    await expect(request).resolves.toEqual([{ id: "a", text: "ok" }]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("succeeds on the second attempt after the first times out", async () => {
+    vi.useFakeTimers();
+    let calls = 0;
+    const fetchMock = vi.fn((_url: string | URL | Request, init?: RequestInit) => {
+      calls += 1;
+      if (calls === 1) {
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true });
+        });
+      }
+      return Promise.resolve(successfulResponse());
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const request = translateBatch(settings, [{ id: "a", text: "hello" }], "en", "zh-CN");
+    await vi.advanceTimersByTimeAsync(60_000);
+    await vi.advanceTimersByTimeAsync(700);
+    await expect(request).resolves.toEqual([{ id: "a", text: "ok" }]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("cleans up timers after a successful request", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn(async () => successfulResponse());
+    vi.stubGlobal("fetch", fetchMock);
+    const request = translateBatch(settings, [{ id: "a", text: "hello" }], "en", "zh-CN");
+    await vi.advanceTimersByTimeAsync(0);
+    await expect(request).resolves.toEqual([{ id: "a", text: "ok" }]);
+    expect(vi.getTimerCount()).toBe(0);
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+});
+
+describe("translateBatch transport validation", () => {
+  it("rejects remote HTTP without consent before fetch and does not reflect the key", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const request = translateBatch({ ...settings, baseUrl: "http://api.example.test/v1", allowInsecureHttp: false }, [{ id: "a", text: "hello" }], "en", "zh-CN");
+    await expect(request).rejects.toThrow("明文传输");
+    expect(fetchMock).not.toHaveBeenCalled();
+    try { await request; } catch (error) { expect(String(error)).not.toContain("placeholder"); }
+  });
+
+  it.each([
+    ["http://api.example.test/v1", true],
+    ["https://api.example.test/v1", false],
+    ["http://localhost:8080/v1", false]
+  ] as const)("allows approved transport %s", async (baseUrl, allowInsecureHttp) => {
+    const fetchMock = vi.fn(async () => successfulResponse());
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(translateBatch({ ...settings, baseUrl, allowInsecureHttp }, [{ id: "a", text: "hello" }], "en", "zh-CN")).resolves.toEqual([{ id: "a", text: "ok" }]);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("does not reflect the API key from provider error bodies", async () => {
+    expect.assertions(1);
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error: { message: "placeholder rejected" } }), { status: 400 })));
+    try {
+      await translateBatch(settings, [{ id: "a", text: "hello" }], "en", "zh-CN");
+    } catch (error) {
+      expect(String(error)).not.toContain("placeholder");
+    }
+  });
+});
+
+describe("buildSystemPrompt", () => {
+  it("omits terminology when the glossary is empty", () => {
+    const prompt = buildSystemPrompt(settings, "en", "zh-CN");
+    expect(prompt).toContain("professional translator");
+    expect(prompt).not.toContain("Fixed terminology");
+    expect(prompt).toContain("Return only JSON");
+  });
+
+  it("injects fixed terminology entries", () => {
+    const prompt = buildSystemPrompt({ ...settings, glossary: "board=板卡\nkernel=内核" }, "en", "zh-CN");
+    expect(prompt).toContain("Fixed terminology");
+    expect(prompt).toContain("board => 板卡");
+    expect(prompt).toContain("kernel => 内核");
+  });
+
+  it("caps the injected glossary length", () => {
+    const glossary = Array.from({ length: 100 }, (_, index) => `term${index}=${"译".repeat(30)}`).join("\n");
+    const prompt = buildSystemPrompt({ ...settings, glossary }, "en", "zh-CN");
+    const injected = prompt.slice(prompt.indexOf("Fixed terminology"), prompt.indexOf("Return only JSON"));
+    expect(injected.length).toBeLessThan(2200);
+  });
+});
