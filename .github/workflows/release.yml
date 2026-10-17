@@ -1,0 +1,130 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to publish (e.g. v0.1.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve tag
+        id: meta
+        run: |
+          set -euo pipefail
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          case "$TAG" in
+            v*) ;;
+            *) echo "::error::Tag '$TAG' must start with 'v' (for example v0.1.0)."; exit 1 ;;
+          esac
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "Releasing $TAG"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.meta.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify tag matches package and manifest versions
+        run: |
+          set -euo pipefail
+          expected="${{ steps.meta.outputs.version }}"
+          pkg=$(node -p "require('./package.json').version")
+          manifest=$(node -p "require('./public/manifest.json').version")
+          echo "tag=$expected package=$pkg manifest=$manifest"
+          if [ "$pkg" != "$expected" ]; then
+            echo "::error::package.json version ($pkg) does not match tag ($expected)."
+            exit 1
+          fi
+          if [ "$manifest" != "$expected" ]; then
+            echo "::error::public/manifest.json version ($manifest) does not match tag ($expected)."
+            exit 1
+          fi
+
+      - name: Typecheck, test, build, and validate
+        run: npm run check
+
+      - name: Package extension
+        run: npm run package
+
+      - name: Record archive checksum
+        id: archive
+        run: |
+          set -euo pipefail
+          sha=$(sha256sum lingolens-extension.zip | awk '{print $1}')
+          size=$(stat -c %s lingolens-extension.zip)
+          echo "sha256=$sha" >> "$GITHUB_OUTPUT"
+          echo "size=$size" >> "$GITHUB_OUTPUT"
+          echo "SHA-256: $sha"
+          echo "Size: $size bytes"
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.meta.outputs.tag }}"
+          NOTES=$(cat <<NOTES
+          Chrome extension build for \`$TAG\`.
+
+          ### Assets
+          - \`lingolens-extension.zip\` — unpacked build of \`dist/\` with \`manifest.json\` at the archive root.
+
+          ### Verification
+          - Typecheck, unit tests, production build, and dist validation passed (\`npm run check\`).
+          - \`package.json\` and \`public/manifest.json\` declare version \`${{ steps.meta.outputs.version }}\`.
+          - Archive is reproducible: sorted entries and fixed timestamps.
+          - SHA-256: \`${{ steps.archive.outputs.sha256 }}\`
+          - Size: ${{ steps.archive.outputs.size }} bytes
+
+          ### Install
+          1. Download \`lingolens-extension.zip\` and unzip it.
+          2. Open \`chrome://extensions/\` and enable Developer mode.
+          3. Choose **Load unpacked** and select the unzipped folder.
+          4. Open the extension settings and enter your OpenAI-compatible endpoint, model, and API key.
+          NOTES
+          )
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; uploading assets with --clobber."
+            gh release upload "$TAG" lingolens-extension.zip --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG" lingolens-extension.zip \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "LingoLens $TAG" \
+              --notes "$NOTES" \
+              --verify-tag
+          fi
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lingolens-extension-${{ steps.meta.outputs.version }}
+          path: lingolens-extension.zip
+          if-no-files-found: error
+          retention-days: 30

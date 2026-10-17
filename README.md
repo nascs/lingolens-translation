@@ -57,6 +57,28 @@ npm run release      # check + package
 
 `.github/workflows/ci.yml` runs on every push to `main`, every pull request, and on manual dispatch. It installs dependencies with `npm ci`, runs `npm run check` (typecheck, 288 unit tests, production build, dist validation), builds the deterministic archive with `npm run package`, prints its SHA-256, and uploads `lingolens-extension.zip` as a workflow artifact.
 
+## Releasing
+
+Releases are driven by `v*` tags and handled by `.github/workflows/release.yml`.
+
+```bash
+# 1. Bump the version in package.json and public/manifest.json
+# 2. Commit the change, then create and push an annotated tag
+git commit -am "chore: release v0.1.1"
+git tag -a v0.1.1 -m "LingoLens v0.1.1"
+git push origin main v0.1.1
+```
+
+The workflow then:
+
+1. checks that the tag matches both `package.json` and `public/manifest.json` versions and fails otherwise;
+2. runs the full `npm run check` gate;
+3. builds the deterministic archive with `npm run package`;
+4. creates a GitHub Release named `LingoLens vX.Y.Z`, attaches `lingolens-extension.zip`, and records its SHA-256;
+5. uploads the archive as a workflow artifact (30 days).
+
+Existing releases can be re-published from the Actions tab with **Run workflow**, supplying the tag to publish; the archive is re-uploaded with `--clobber` instead of creating a duplicate release.
+
 ## API configuration
 
 | Provider | Default API base URL | Default model |
