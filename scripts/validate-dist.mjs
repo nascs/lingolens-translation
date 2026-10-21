@@ -9,6 +9,9 @@ const requiredFiles = [
   "dist/popup.html",
   "dist/options.html",
   "dist/translator.html",
+  "dist/quick.html",
+  "dist/quick.js",
+  "dist/quick.css",
   "dist/pdf.html",
   "dist/pdf.js",
   "dist/pdf.css"

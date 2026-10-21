@@ -7,6 +7,14 @@ export interface TranslationItem {
 
 export interface TranslationResult extends TranslationItem {}
 
+export interface ImageTranslationResult {
+  sourceText: string;
+  translatedText: string;
+  model: string;
+}
+
+export type QuickWindowView = "text" | "image";
+
 export type PageStatusName = "idle" | "translating" | "paused" | "completed" | "error";
 
 export interface PageStatus {
@@ -28,6 +36,7 @@ export interface PdfSourceResponse {
 export type BackgroundRequest =
   | { type: "INJECT_ACTIVE_TAB" }
   | { type: "OPEN_TRANSLATOR" }
+  | { type: "OPEN_QUICK_WINDOW"; view?: QuickWindowView }
   | { type: "OPEN_OPTIONS" }
   | { type: "OPEN_PDF_VIEWER"; tabId: number; sourceUrl?: string }
   | { type: "SET_PDF_SOURCE"; sourceUrl: string }
@@ -35,6 +44,7 @@ export type BackgroundRequest =
   | { type: "CLEAR_PDF_SOURCE" }
   | { type: "CANCEL_PDF_TRANSLATIONS" }
   | { type: "TRANSLATE_BATCH"; items: TranslationItem[]; sourceLanguage: string; targetLanguage: string }
+  | { type: "TRANSLATE_IMAGE"; imageDataUrl: string; sourceLanguage: string; targetLanguage: string }
   | { type: "TEST_PROVIDER"; settings: Settings };
 
 export type PageRequest =

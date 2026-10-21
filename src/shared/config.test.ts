@@ -3,6 +3,7 @@ import {
   DEFAULT_SETTINGS,
   MAX_GLOSSARY_ENTRIES,
   defaultsForProvider,
+  loadSettings,
   normalizeDisplayMode,
   normalizeSettings,
   parseGlossary,
@@ -127,5 +128,23 @@ describe("parseGlossary", () => {
 
   it("returns an empty list for empty input", () => {
     expect(parseGlossary("")).toEqual([]);
+  });
+});
+
+describe("image model", () => {
+  it("defaults to empty, meaning the text model is reused", () => {
+    expect(DEFAULT_SETTINGS.imageModel).toBe("");
+    expect(normalizeSettings({})).toMatchObject({ imageModel: "" });
+  });
+
+  it("trims an explicitly configured image model", () => {
+    expect(normalizeSettings({ imageModel: "  vision-model  " }).imageModel).toBe("vision-model");
+  });
+
+  it("loads the image model from storage", async () => {
+    const get = vi.fn(async (_keys?: string | string[]) => ({ model: "text-model", imageModel: "vision-model" }));
+    vi.stubGlobal("chrome", { storage: { local: { get, set: vi.fn() } } });
+    await expect(loadSettings()).resolves.toMatchObject({ imageModel: "vision-model" });
+    expect(get.mock.calls[0]?.[0]).toContain("imageModel");
   });
 });

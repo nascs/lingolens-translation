@@ -1,7 +1,7 @@
 import { loadSettings, normalizeSettings, validateTransport, type Settings } from "../shared/config";
 import { parsePdfSourceUrl, pdfSourcePermissionPattern } from "../pdf/source";
 import { errorMessage, type BackgroundRequest, type PdfSourceRecord, type PdfSourceResponse, type Response, type TranslationItem, type TranslationResult } from "../shared/messages";
-import { translateBatch, TranslationApiError } from "./api";
+import { translateBatch, translateImage, TranslationApiError } from "./api";
 import { createPdfSourceRecord, isExactSenderPage, isFreshPdfSourceRecord, isValidPdfTabId, pdfSourceMatchesTab, pdfSourceStorageKey } from "./pdf-source";
 import { PdfTranslationCancelledError, PdfTranslationManager } from "./pdf-translations";
 
@@ -220,6 +220,16 @@ export async function handleMessage(message: BackgroundRequest, sender: chrome.r
       await chrome.tabs.create({ url: chrome.runtime.getURL("translator.html") });
       return { opened: true };
     }
+    case "OPEN_QUICK_WINDOW": {
+      const hash = message.view === "image" ? "#image" : "";
+      await chrome.windows.create({
+        url: chrome.runtime.getURL(`quick.html${hash}`),
+        type: "popup",
+        width: 540,
+        height: 760
+      });
+      return { opened: true };
+    }
     case "OPEN_OPTIONS": {
       await chrome.runtime.openOptionsPage();
       return { opened: true };
@@ -230,6 +240,11 @@ export async function handleMessage(message: BackgroundRequest, sender: chrome.r
     case "CLEAR_PDF_SOURCE":
     case "CANCEL_PDF_TRANSLATIONS":
       return handlePdfMessage(message, sender);
+    case "TRANSLATE_IMAGE": {
+      const settings = await loadSettings();
+      validateTransport(settings.baseUrl, settings.allowInsecureHttp);
+      return translateImage(settings, message.imageDataUrl, message.sourceLanguage, message.targetLanguage);
+    }
     case "TRANSLATE_BATCH": {
       const settings = await loadSettings();
       validateTransport(settings.baseUrl, settings.allowInsecureHttp);

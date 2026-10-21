@@ -22,6 +22,7 @@ const form = element<HTMLFormElement>("settings-form");
 const apiKey = element<HTMLInputElement>("api-key");
 const baseUrl = element<HTMLInputElement>("base-url");
 const model = element<HTMLInputElement>("model");
+const imageModel = element<HTMLInputElement>("image-model");
 const allowInsecureHttp = element<HTMLInputElement>("allow-insecure-http");
 const insecureHttpRisk = element("insecure-http-risk");
 const sourceLanguage = element<HTMLSelectElement>("source-language");
@@ -52,6 +53,7 @@ function readForm(): Settings {
     apiKey: apiKey.value.trim(),
     baseUrl: baseUrl.value.trim(),
     model: model.value.trim(),
+    imageModel: imageModel.value.trim(),
     allowInsecureHttp: allowInsecureHttp.checked,
     sourceLanguage: sourceLanguage.value,
     targetLanguage: targetLanguage.value,
@@ -73,6 +75,7 @@ function fillForm(settings: Settings): void {
   apiKey.value = settings.apiKey;
   baseUrl.value = settings.baseUrl;
   model.value = settings.model;
+  imageModel.value = settings.imageModel;
   allowInsecureHttp.checked = settings.allowInsecureHttp;
   sourceLanguage.value = settings.sourceLanguage;
   targetLanguage.value = settings.targetLanguage;

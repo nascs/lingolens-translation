@@ -13,6 +13,7 @@ export default defineConfig({
         popup: fromRoot("popup.html"),
         options: fromRoot("options.html"),
         translator: fromRoot("translator.html"),
+        quick: fromRoot("quick.html"),
         pdf: fromRoot("pdf.html"),
         "service-worker": fromRoot("src/background/index.ts"),
         content: fromRoot("src/content/index.ts")

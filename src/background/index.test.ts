@@ -11,6 +11,7 @@ const remoteHttpSettings: Settings = {
   apiKey: "placeholder",
   baseUrl: "http://api.example.test/v1",
   model: "example-model",
+  imageModel: "",
   allowInsecureHttp: false,
   sourceLanguage: "auto",
   targetLanguage: "zh-CN",

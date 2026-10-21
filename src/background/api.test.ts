@@ -1,12 +1,25 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Settings } from "../shared/config";
-import { buildSystemPrompt, parseTranslationResponse, translateBatch, TranslationApiError } from "./api";
+import {
+  buildImagePrompt,
+  buildSystemPrompt,
+  isVisionUnsupportedError,
+  looksLikeVisionRefusal,
+  parseImageTranslationContent,
+  parseImageTranslationResponse,
+  parseTranslationResponse,
+  translateBatch,
+  translateImage,
+  TranslationApiError,
+  visionUnsupportedMessage
+} from "./api";
 
 const settings: Settings = {
   provider: "deepseek",
   apiKey: "placeholder",
   baseUrl: "https://api.example.test",
   model: "test-model",
+  imageModel: "",
   allowInsecureHttp: false,
   sourceLanguage: "auto",
   targetLanguage: "zh-CN",
@@ -242,5 +255,117 @@ describe("buildSystemPrompt", () => {
     const prompt = buildSystemPrompt({ ...settings, glossary }, "en", "zh-CN");
     const injected = prompt.slice(prompt.indexOf("Fixed terminology"), prompt.indexOf("Return only JSON"));
     expect(injected.length).toBeLessThan(2200);
+  });
+});
+
+const imageDataUrl = "data:image/png;base64,iVBORw0KGgo=";
+
+function imageResponse(content: string): Response {
+  return new Response(JSON.stringify({ choices: [{ message: { content } }] }), { status: 200 });
+}
+
+describe("image prompt and parsing", () => {
+  it("asks for both transcription and translation", () => {
+    const prompt = buildImagePrompt(settings, "auto", "zh-CN");
+    expect(prompt).toContain("Translate from the detected source language to Simplified Chinese");
+    expect(prompt).toContain("[原文]");
+    expect(prompt).toContain("[译文]");
+  });
+
+  it("injects the glossary into the image prompt", () => {
+    const prompt = buildImagePrompt({ ...settings, glossary: "board=板卡" }, "ko", "zh-CN");
+    expect(prompt).toContain("board => 板卡");
+  });
+
+  it("splits the two sections", () => {
+    expect(parseImageTranslationContent("[原文]\n안녕하세요\n[译文]\n你好")).toEqual({
+      sourceText: "안녕하세요",
+      translatedText: "你好"
+    });
+  });
+
+  it("strips a code fence and tolerates a missing source marker", () => {
+    expect(parseImageTranslationContent("```\n[译文]\n你好\n```")).toEqual({ sourceText: "", translatedText: "你好" });
+  });
+
+  it("falls back to treating the whole reply as the translation", () => {
+    expect(parseImageTranslationContent("图片里写着你好")).toEqual({ sourceText: "", translatedText: "图片里写着你好" });
+  });
+
+  it("reads array-shaped content parts", () => {
+    const raw = { choices: [{ message: { content: [{ type: "text", text: "[原文]\na\n" }, { type: "text", text: "[译文]\nb" }] } }] };
+    expect(parseImageTranslationResponse(raw)).toEqual({ sourceText: "a", translatedText: "b" });
+  });
+});
+
+describe("vision capability detection", () => {
+  it.each([
+    [400, "unknown variant `image_url`, expected `text`"],
+    [400, "Invalid content type. image_url is only supported by certain models."],
+    [422, "messages.content must be a string"],
+    [400, "当前模型不支持图片输入"]
+  ] as const)("maps status %i with %s to an unsupported-model error", (status, message) => {
+    expect(isVisionUnsupportedError(status, message)).toBe(true);
+  });
+
+  it("does not blame vision for unrelated errors", () => {
+    expect(isVisionUnsupportedError(400, "Invalid API key")).toBe(false);
+    expect(isVisionUnsupportedError(404, "The model does not exist")).toBe(false);
+    expect(isVisionUnsupportedError(500, "image backend unavailable")).toBe(false);
+    expect(isVisionUnsupportedError(400, "image exceeds maximum size")).toBe(false);
+    expect(isVisionUnsupportedError(400, "image format not supported")).toBe(false);
+  });
+
+  it("recognizes refusals without matching 'cannot see any text in the image'", () => {
+    expect(looksLikeVisionRefusal("I cannot see the image.")).toBe(true);
+    expect(looksLikeVisionRefusal("看不到图片")).toBe(true);
+    expect(looksLikeVisionRefusal("I cannot see any text in the image.")).toBe(false);
+  });
+
+  it("names the configured model in the guidance", () => {
+    expect(visionUnsupportedMessage("deepseek-chat")).toContain("deepseek-chat");
+    expect(visionUnsupportedMessage("deepseek-chat")).toContain("图片模型");
+  });
+});
+
+describe("translateImage", () => {
+  it("uses the image model and sends a multimodal message", async () => {
+    const fetchMock = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) => imageResponse("[原文]\n안녕\n[译文]\n你好"));
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await translateImage({ ...settings, imageModel: "vision-model" }, imageDataUrl, "ko", "zh-CN");
+    expect(result).toEqual({ sourceText: "안녕", translatedText: "你好", model: "vision-model" });
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(body.model).toBe("vision-model");
+    expect(body.messages[1].content[1]).toEqual({ type: "image_url", image_url: { url: imageDataUrl } });
+  });
+
+  it("falls back to the main model when no image model is set", async () => {
+    const fetchMock = vi.fn(async () => imageResponse("[译文]\n你好"));
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await translateImage(settings, imageDataUrl, "auto", "zh-CN");
+    expect(result.model).toBe("test-model");
+  });
+
+  it("rejects a malformed image before calling the provider", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(translateImage(settings, "data:image/svg+xml;base64,PHN2Zz4=", "auto", "zh-CN"))
+      .rejects.toMatchObject({ code: "INVALID_IMAGE" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("turns a provider capability error into actionable guidance", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      error: { message: "unknown variant `image_url`, expected `text`" }
+    }), { status: 400 })));
+    await expect(translateImage(settings, imageDataUrl, "ko", "zh-CN")).rejects.toMatchObject({
+      code: "VISION_UNSUPPORTED",
+      message: expect.stringContaining("图片模型")
+    });
+  });
+
+  it("flags a model that answers as if it cannot see images", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => imageResponse("I cannot see the image you mentioned.")));
+    await expect(translateImage(settings, imageDataUrl, "ko", "zh-CN")).rejects.toMatchObject({ code: "VISION_UNSUPPORTED" });
   });
 });

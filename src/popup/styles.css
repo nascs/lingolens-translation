@@ -34,7 +34,11 @@ h2 { max-width: 225px; margin: 0; font-size: 29px; font-weight: 500; line-height
 .quick { display: grid; gap: 8px; margin-top: 18px; }
 .quick-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .quick-title { color: #a14733; font: 700 10px/1 ui-monospace, monospace; letter-spacing: .12em; }
-.quick-route { overflow: hidden; color: #7a857f; font: 600 9px/1.2 ui-monospace, monospace; text-align: right; white-space: nowrap; text-overflow: ellipsis; }
+.quick-target { max-width: 132px; padding: 3px 6px; border: 1px solid rgba(32,52,46,.14); border-radius: 7px; color: #4b5b54; background: rgba(255,255,255,.5); font-size: 10px; }
+.quick-hint { margin: 0; color: #8b948f; font-size: 9px; line-height: 1.5; }
+.quick-links { display: flex; align-items: center; gap: 6px; }
+.quick-links button { padding: 0; border: 0; color: #a14733; background: transparent; font-size: 10px; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.quick-links span { color: #b9c1bc; font-size: 10px; }
 .quick-source { width: 100%; padding: 9px 11px; border: 1px solid rgba(32,52,46,.16); border-radius: 10px; color: #20342e; background: rgba(255,255,255,.62); font: inherit; font-size: 12px; line-height: 1.5; resize: vertical; }
 .quick-source::placeholder { color: #98a29c; }
 .quick-source:focus { outline: 2px solid rgba(229,91,58,.55); outline-offset: 1px; }

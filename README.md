@@ -7,7 +7,9 @@ A local-first Chrome extension for immersive bilingual reading. LingoLens keeps 
 - **In-page bilingual translation** — translates readable blocks as you scroll; supports pause, resume, dynamic content, and one-click restore.
 - **Layout-aware insert placement** — picks a safer insertion point so translations avoid landing inside links, clipped containers, or flex/grid children.
 - **Three display modes** — bilingual (original + translation), translation-only, or hover (translation appears when you move the pointer over the original). The choice is remembered.
-- **Quick text translation in the popup** — paste text, press `Ctrl+Enter` (or click Translate), and copy the result without opening a separate page.
+- **Quick text translation in the popup** — paste text, pick a target language (or keep smart detection), press `Ctrl+Enter`, and copy the result without opening a separate page.
+- **Quick window for text and screenshots** — a real browser window with text and image tabs, used when the toolbar popup cannot reach your IME or when translating a screenshot.
+- **Image translation** — paste, drop, or choose a screenshot; a vision model transcribes the text and translates it. Images are downscaled to 1600 px on the long edge before upload.
 - **Standalone translator page** — long-form text with smart language selection (Chinese → English, everything else → Simplified Chinese) or a manual target language.
 - **Glossary** — define fixed term mappings (`source=target`, one per line) that apply to page, popup, and PDF translation. Up to 100 entries.
 - **Markdown export** — export the current page's source/translation pairs from the popup for archiving or sharing.
@@ -38,6 +40,22 @@ npm run check        # typecheck + unit tests + build + dist validation
 6. Visit a regular web page and click the LingoLens toolbar icon. A floating panel appears for translating, pausing, or restoring.
 
 > Chrome internal pages and the Chrome Web Store block script injection, so they cannot be translated.
+
+## Text and image input
+
+### CJK input in the toolbar popup
+
+On Wayland (KDE or GNOME with fcitx5/IBus), Chrome does not deliver IME composition events to toolbar popups. Latin characters and pasted text work, but typing Chinese, Japanese, or Korean does not. This is a Chromium bug (issues 452830034 and 572154970), not an extension bug, and it does not affect X11.
+
+Click **新窗口输入** in the popup to open `quick.html` as a normal browser window, where the IME works. The window has a **文本** tab and an **图片** tab and can stay open next to the page you are reading.
+
+### Image translation
+
+- Paste a screenshot with `Ctrl+V`, drag it into the window, or choose a file. PNG, JPEG, and WebP up to 25 MB are accepted.
+- Images longer than 1600 px on the long edge are downscaled; large PNGs are re-encoded as JPEG before upload.
+- Set **图片模型** in settings to a vision-capable model such as `gpt-4o-mini`, `gemini-2.0-flash`, or `qwen-vl-max`. Leave it empty to reuse the text model, which only works if that model accepts image input.
+- The result shows the recognised source text and the translation. If the provider rejects image input, LingoLens names the configured model and links to settings instead of failing silently.
+- Screenshots are sent only when you click **翻译图片** and are not cached or stored.
 
 ## Packaging
 
@@ -87,6 +105,8 @@ Existing releases can be re-published from the Actions tab with **Run workflow**
 | OpenAI | `https://api.openai.com/v1` | `gpt-4.1-mini` |
 | Custom | Empty — fill in your own endpoint | Empty — fill in your own model |
 
+Image translation uses **图片模型** when it is set and falls back to the model above otherwise.
+
 For a custom provider, enter either the API root or the full `/chat/completions` URL. A prefilled address does not imply permission. Remote HTTP sends the API key and page text in plaintext and requires explicit consent in settings; without it, saving, testing, permission requests, and translation are all refused. HTTPS and `localhost` / `127.0.0.1` HTTP are exempt.
 
 ## Privacy and security
@@ -97,10 +117,11 @@ For a custom provider, enter either the API root or the full `/chat/completions`
 - Custom providers require an explicit per-origin permission request. Remote HTTP additionally requires the risk consent.
 - PDF URLs are bound to a tab's source record in `chrome.storage.session` and expire; files chosen with the local picker are never stored.
 - PDF text is sent directly to your configured provider. Scanned PDFs and OCR are not supported.
+- Screenshots are sent to the configured provider only when you submit them for image translation, and are never written to storage.
 
 ## Scope and limits
 
-This version covers in-page bilingual reading and text-layer PDF translation. It does not include PDF OCR, video subtitles, image OCR, manga translation, or account sync.
+This version covers in-page bilingual reading, text-layer PDF translation, and single-image translation through a vision model. It does not include PDF OCR, video subtitles, multi-image OCR, manga translation, or account sync. Image results are plain text and do not preserve the original layout.
 
 PDF limits: text layer only; files up to 50 MiB, up to 300 pages, and up to 500,000 extracted characters. Language detection samples the first three non-empty pages (up to 4,000 characters) and runs once per document.
 

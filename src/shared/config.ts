@@ -7,6 +7,8 @@ export interface Settings {
   apiKey: string;
   baseUrl: string;
   model: string;
+  /** 图片翻译专用模型；留空时沿用 model。 */
+  imageModel: string;
   allowInsecureHttp: boolean;
   sourceLanguage: string;
   targetLanguage: string;
@@ -22,6 +24,7 @@ export const DEFAULT_SETTINGS: Settings = {
   apiKey: "",
   baseUrl: "",
   model: "",
+  imageModel: "",
   allowInsecureHttp: false,
   sourceLanguage: "auto",
   targetLanguage: "zh-CN",
@@ -110,6 +113,7 @@ const SETTING_KEYS = [
   "apiKey",
   "baseUrl",
   "model",
+  "imageModel",
   "allowInsecureHttp",
   "sourceLanguage",
   "targetLanguage",
@@ -147,6 +151,7 @@ export function normalizeSettings(input: unknown): Settings {
     apiKey: typeof value.apiKey === "string" ? value.apiKey.trim() : "",
     baseUrl: typeof value.baseUrl === "string" && value.baseUrl.trim() ? value.baseUrl.trim().replace(/\/+$/, "") : defaults.baseUrl,
     model: typeof value.model === "string" && value.model.trim() ? value.model.trim() : defaults.model,
+    imageModel: typeof value.imageModel === "string" ? value.imageModel.trim() : "",
     allowInsecureHttp: value.allowInsecureHttp === true,
     sourceLanguage: typeof value.sourceLanguage === "string" ? value.sourceLanguage : DEFAULT_SETTINGS.sourceLanguage,
     targetLanguage: typeof value.targetLanguage === "string" ? value.targetLanguage : DEFAULT_SETTINGS.targetLanguage,

@@ -19,7 +19,9 @@ const quickTranslate = element<HTMLButtonElement>("quick-translate");
 const quickCopy = element<HTMLButtonElement>("quick-copy");
 const quickResult = element("quick-result");
 const quickNote = element("quick-note");
-const quickRoute = element("quick-route");
+const quickTarget = element<HTMLSelectElement>("quick-target");
+const QUICK_TARGET_KEY = "lingolens:quick-target";
+let quickTargetTouched = false;
 let quickTranslated = "";
 let tabId: number | undefined;
 let capturedTabId: number | undefined;
@@ -109,8 +111,7 @@ async function translateQuickText(): Promise<void> {
   quickNote.textContent = "正在翻译…";
   quickResult.hidden = true;
   try {
-    const decision = await resolveTargetLanguage(text, "smart");
-    quickRoute.textContent = decision.label;
+    const decision = await resolveTargetLanguage(text, quickTarget.value);
     const settings = await loadSettings();
     const response = await chrome.runtime.sendMessage({
       type: "TRANSLATE_BATCH",
@@ -125,7 +126,7 @@ async function translateQuickText(): Promise<void> {
     quickResult.textContent = translated;
     quickResult.hidden = false;
     quickCopy.disabled = false;
-    quickNote.textContent = "";
+    quickNote.textContent = quickTarget.value === "smart" ? decision.label : "";
   } catch (error) {
     quickTranslated = "";
     quickCopy.disabled = true;
@@ -137,6 +138,16 @@ async function translateQuickText(): Promise<void> {
   }
 }
 quickTranslate.addEventListener("click", () => void translateQuickText());
+quickTarget.addEventListener("change", () => {
+  quickTargetTouched = true;
+  void chrome.storage.local.set({ [QUICK_TARGET_KEY]: quickTarget.value }).catch(() => {});
+});
+element<HTMLButtonElement>("quick-window").addEventListener("click", () => void chrome.runtime.sendMessage({ type: "OPEN_QUICK_WINDOW", view: "text" }));
+element<HTMLButtonElement>("quick-image").addEventListener("click", () => void chrome.runtime.sendMessage({ type: "OPEN_QUICK_WINDOW", view: "image" }));
+void chrome.storage.local.get(QUICK_TARGET_KEY).then((stored) => {
+  const value = stored[QUICK_TARGET_KEY];
+  if (!quickTargetTouched && typeof value === "string" && Array.from(quickTarget.options).some((option) => option.value === value)) quickTarget.value = value;
+}).catch(() => {});
 quickSource.addEventListener("keydown", (event) => {
   if (event.ctrlKey && (event.key === "Enter" || event.key === "NumpadEnter")) { event.preventDefault(); void translateQuickText(); }
 });
