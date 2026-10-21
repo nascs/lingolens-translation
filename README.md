@@ -73,7 +73,7 @@ npm run release      # check + package
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` runs on every push to `main`, every pull request, and on manual dispatch. It installs dependencies with `npm ci`, runs `npm run check` (typecheck, 288 unit tests, production build, dist validation), builds the deterministic archive with `npm run package`, prints its SHA-256, and uploads `lingolens-extension.zip` as a workflow artifact.
+`.github/workflows/ci.yml` runs on every push to `main`, every pull request, and on manual dispatch. It installs dependencies with `npm ci`, runs `npm run check` (typecheck, 327 unit tests, production build, dist validation), builds the deterministic archive with `npm run package`, prints its SHA-256, and uploads `lingolens-extension.zip` as a workflow artifact.
 
 ## Releasing
 

@@ -1,6 +1,6 @@
 {
   "name": "lingolens",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "LingoLens — AI 双语阅读 Chrome 扩展：网页双语对照、弹窗快速翻译、PDF 双栏翻译",
   "type": "module",
